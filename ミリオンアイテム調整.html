@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アイテムバランス計算機（目標プランナー機能付き）</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for better Japanese typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; }
+        .focus\:ring-cyan-500:focus { --tw-ring-color: #06b6d4; }
+        .focus\:border-cyan-500:focus { --tw-border-opacity: 1; border-color: #06b6d4; }
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(0.6) brightness(100%); }
+        .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1) brightness(100%); }
+        .fade-out { animation: fadeOut 3s forwards; }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-3xl p-6 md:p-8 space-y-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+            
+            <div class="text-center">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-cyan-400">アイテムバランス計算機</h1>
+                <p class="mt-2 text-sm md:text-base text-gray-600 dark:text-gray-400">目標ポイント達成の計画と実行ペースを管理します。</p>
+            </div>
+
+            <!-- Settings Save/Load Section -->
+            <div class="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <h2 class="text-md font-semibold text-gray-800 dark:text-gray-200 mb-3 text-center">設定の保存・読込</h2>
+                <div class="flex justify-center items-center space-x-2 sm:space-x-4">
+                    <button id="save-settings-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition shadow-sm">設定を保存</button>
+                    <button id="load-settings-btn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition shadow-sm">設定を読込</button>
+                    <button id="clear-settings-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition shadow-sm">保存データ削除</button>
+                </div>
+                 <p id="settings-status-msg" class="text-center text-sm text-gray-500 dark:text-gray-400 h-5 mt-2"></p>
+            </div>
+
+            <!-- Time & Goal Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Time Calculator Section -->
+                <div class="p-5 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 border-b pb-2 mb-4">期間設定</h2>
+                    <div class="space-y-4">
+                        <div><label class="block text-sm font-medium">現在時刻</label><p id="current-time-display" class="mt-1 text-base font-mono p-2 bg-gray-200 dark:bg-gray-600 rounded-md text-center">読み込み中...</p></div>
+                        <div><label for="end-datetime" class="block text-sm font-medium">終了予定日時</label><input type="datetime-local" id="end-datetime" class="mt-1 block w-full p-2"></div>
+                        <div><label for="margin-hours" class="block text-sm font-medium">マージン時間 [時間]</label><input type="number" id="margin-hours" value="1" min="0" class="mt-1 block w-full p-2"></div>
+                        <div id="time-calc-error" class="text-center text-red-500 dark:text-red-400 font-medium h-5"></div>
+                    </div>
+                </div>
+                <!-- Goal Planner Input Section -->
+                <div class="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <h2 class="text-lg font-semibold text-blue-800 dark:text-blue-300 border-b border-blue-300 dark:border-blue-700 pb-2 mb-4">目標ポイント設定</h2>
+                    <div class="space-y-4">
+                        <div><label for="target-points" class="block text-sm font-medium">目標ポイント</label><input type="number" id="target-points" value="100000" class="mt-1 block w-full p-2"></div>
+                        <div><label for="points-per-action" class="block text-sm font-medium">獲得ポイント</label><input type="number" id="points-per-action" value="2148" class="mt-1 block w-full p-2"></div>
+                        <div><label for="items-for-points" class="block text-sm font-medium">↑のポイントに必要な消費アイテム数</label><input type="number" id="items-for-points" value="720" class="mt-1 block w-full p-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Section -->
+            <div id="input-section" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <h2 class="text-lg font-semibold border-b pb-2">取得設定</h2>
+                    <div><label for="item-get" class="block text-sm font-medium">1回の取得アイテム数</label><input type="number" id="item-get" value="2142" class="mt-1 block w-full p-2"></div>
+                    <div><label for="item-get-time" class="block text-sm font-medium">1回の取得時間 [秒]</label><input type="number" id="item-get-time" value="500" class="mt-1 block w-full p-2"></div>
+                </div>
+                <div class="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <h2 class="text-lg font-semibold border-b pb-2">使用設定</h2>
+                    <div><label for="item-use" class="block text-sm font-medium">1回の使用アイテム数</label><input type="number" id="item-use" value="720" class="mt-1 block w-full p-2"></div>
+                    <div><label for="item-use-time" class="block text-sm font-medium">1回の使用時間 [秒]</label><input type="number" id="item-use-time" value="195" class="mt-1 block w-full p-2"></div>
+                </div>
+                <div class="lg:col-span-2 space-y-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                     <h2 class="text-lg font-semibold border-b pb-2">全体設定</h2>
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div><label for="current-items" class="block text-sm font-medium">現在のアイテム数</label><input type="number" id="current-items" value="250000" class="mt-1 block w-full p-2"></div>
+                        <div><label for="remain-time" class="block text-sm font-medium">残り時間 [秒]</label><input type="number" id="remain-time" value="" class="mt-1 block w-full bg-gray-200 dark:bg-gray-600 p-2" readonly></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center pt-2"><button id="calculate-btn" class="w-full md:w-auto bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-10 rounded-lg transition shadow-md">計画を計算する</button></div>
+
+            <!-- Output Section -->
+            <div id="output-section" class="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4 hidden">
+                <h2 class="text-xl font-semibold text-center text-gray-900 dark:text-cyan-400">目標達成プラン</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg space-y-2">
+                        <h3 class="font-semibold text-lg text-center border-b pb-2">目標達成の試算</h3>
+                        <div class="flex justify-between text-sm"><span>必要な総消費回数:</span><span id="req-uses" class="font-bold">---</span></div>
+                        <div class="flex justify-between text-sm"><span>消費に必要なアイテム総数:</span><span id="req-items-for-use" class="font-bold">---</span></div>
+                        <div class="flex justify-between text-sm"><span>追加取得が必要なアイテム数:</span><span id="req-items-to-get" class="font-bold">---</span></div>
+                        <div class="flex justify-between text-sm text-blue-600 dark:text-blue-400"><span>└ 追加取得の必要回数:</span><span id="req-gets" class="font-bold">---</span></div>
+                        <div class="flex justify-between text-sm text-blue-600 dark:text-blue-400"><span>└ 追加取得にかかる時間:</span><span id="time-for-gets" class="font-bold">---</span></div>
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg space-y-2">
+                        <h3 class="font-semibold text-lg text-center border-b pb-2">達成可能性の判定</h3>
+                        <div id="judgement-box" class="p-3 rounded-lg text-center transition"><p class="font-bold text-lg" id="judgement-text">---</p><p class="text-xs" id="judgement-detail">---</p></div>
+                        <div class="flex justify-between text-xs pt-1"><span>計画に必要な総時間:</span><span id="total-time-req" class="font-mono">--:--:--</span></div>
+                        <div class="flex justify-between text-xs"><span>設定期間の残り時間:</span><span id="total-time-avail" class="font-mono">--:--:--</span></div>
+                    </div>
+                </div>
+                 <div id="error-message" class="text-center text-red-500 dark:text-red-400 font-medium"></div>
+            </div>
+            
+            <!-- Pacemakers Section -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700 space-y-6">
+                <div id="pace-status" class="p-4 rounded-lg text-center transition"><p class="font-bold text-lg" id="pace-status-text">計算ボタンで目標を設定</p><p class="text-sm" id="pace-status-detail"></p></div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Get Pacemaker -->
+                    <div id="get-pacemaker-section" class="space-y-3">
+                        <h3 class="text-lg font-semibold text-center text-gray-900 dark:text-cyan-400">取得ペースメーカー</h3>
+                        <button id="get-item-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition shadow-md">アイテム取得 (+1)</button>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg"><p class="text-xs">取得回数</p><p id="get-count" class="text-xl font-bold">0</p></div>
+                            <div class="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg"><p class="text-xs">現在のラップ</p><p id="get-current-lap" class="text-xl font-mono font-bold">00:00</p></div>
+                            <div class="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg"><p class="text-xs">平均ラップ</p><p id="get-avg-lap" class="text-xl font-mono font-bold">--:--</p></div>
+                        </div>
+                    </div>
+                    <!-- Use Pacemaker -->
+                    <div id="use-pacemaker-section" class="space-y-3">
+                        <h3 class="text-lg font-semibold text-center text-gray-900 dark:text-cyan-400">使用ペースメーカー</h3>
+                        <button id="use-item-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition shadow-md">アイテム使用 (+1)</button>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg"><p class="text-xs">使用回数</p><p id="use-count" class="text-xl font-bold">0</p></div>
+                            <div class="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg"><p class="text-xs">現在のラップ</p><p id="use-current-lap" class="text-xl font-mono font-bold">00:00</p></div>
+                            <div class="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg"><p class="text-xs">平均ラップ</p><p id="use-avg-lap" class="text-xl font-mono font-bold">--:--</p></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center"><button id="reset-pace-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition shadow-md text-sm">両方のペースをリセット</button></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Element References ---
+        const allElements = {
+            itemGet: document.getElementById('item-get'), itemGetTime: document.getElementById('item-get-time'),
+            itemUse: document.getElementById('item-use'), itemUseTime: document.getElementById('item-use-time'),
+            currentItems: document.getElementById('current-items'), calculateBtn: document.getElementById('calculate-btn'),
+            outputSection: document.getElementById('output-section'), errorMessage: document.getElementById('error-message'),
+            remainTime: document.getElementById('remain-time'), currentTimeDisplay: document.getElementById('current-time-display'),
+            endDatetime: document.getElementById('end-datetime'), marginHours: document.getElementById('margin-hours'),
+            timeCalcError: document.getElementById('time-calc-error'),
+            saveSettingsBtn: document.getElementById('save-settings-btn'), loadSettingsBtn: document.getElementById('load-settings-btn'),
+            clearSettingsBtn: document.getElementById('clear-settings-btn'), settingsStatusMsg: document.getElementById('settings-status-msg'),
+            targetPoints: document.getElementById('target-points'), pointsPerAction: document.getElementById('points-per-action'),
+            itemsForPoints: document.getElementById('items-for-points'),
+            reqUses: document.getElementById('req-uses'), reqItemsForUse: document.getElementById('req-items-for-use'),
+            reqItemsToGet: document.getElementById('req-items-to-get'), reqGets: document.getElementById('req-gets'),
+            timeForGets: document.getElementById('time-for-gets'), judgementBox: document.getElementById('judgement-box'),
+            judgementText: document.getElementById('judgement-text'), judgementDetail: document.getElementById('judgement-detail'),
+            totalTimeReq: document.getElementById('total-time-req'), totalTimeAvail: document.getElementById('total-time-avail'),
+            paceStatus: document.getElementById('pace-status'), paceStatusText: document.getElementById('pace-status-text'),
+            paceStatusDetail: document.getElementById('pace-status-detail'), resetPaceBtn: document.getElementById('reset-pace-btn'),
+            // Get Pacemaker
+            getItemBtn: document.getElementById('get-item-btn'), getCount: document.getElementById('get-count'),
+            getCurrentLap: document.getElementById('get-current-lap'), getAvgLap: document.getElementById('get-avg-lap'),
+            // Use Pacemaker
+            useItemBtn: document.getElementById('use-item-btn'), useCount: document.getElementById('use-count'),
+            useCurrentLap: document.getElementById('use-current-lap'), useAvgLap: document.getElementById('use-avg-lap'),
+        };
+
+        // --- State Variables ---
+        let usePace = { count: 0, lapTimes: [], lastTimestamp: null, intervalId: null };
+        let getPace = { count: 0, lapTimes: [], lastTimestamp: null, intervalId: null };
+        let plan = { n_target: 0, m_target: 0, time_for_gets: 0, time_for_uses: 0, planned_avg_lap: 0 };
+        const SETTINGS_KEY = 'itemBalanceCalculatorSettings_v3';
+
+        // --- Utility Functions ---
+        const formatSeconds = (sec, showHours = false) => {
+            if (isNaN(sec) || sec < 0) return showHours ? "--:--:--" : "--:--";
+            const totalSeconds = Math.round(sec);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return showHours 
+                ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+                : `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        };
+
+        // --- Settings Management ---
+        function showSettingsMessage(message) {
+            allElements.settingsStatusMsg.textContent = message;
+            allElements.settingsStatusMsg.classList.remove('fade-out');
+            void allElements.settingsStatusMsg.offsetWidth; 
+            allElements.settingsStatusMsg.classList.add('fade-out');
+        }
+
+        function saveSettings() {
+            const settings = {
+                itemGet: allElements.itemGet.value, itemGetTime: allElements.itemGetTime.value,
+                itemUse: allElements.itemUse.value, itemUseTime: allElements.itemUseTime.value,
+                currentItems: allElements.currentItems.value, endDatetime: allElements.endDatetime.value,
+                marginHours: allElements.marginHours.value, targetPoints: allElements.targetPoints.value,
+                pointsPerAction: allElements.pointsPerAction.value, itemsForPoints: allElements.itemsForPoints.value,
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            showSettingsMessage('設定を保存しました');
+        }
+
+        function loadSettings() {
+            const savedSettings = localStorage.getItem(SETTINGS_KEY);
+            if (savedSettings) {
+                const s = JSON.parse(savedSettings);
+                allElements.itemGet.value = s.itemGet || '2142';
+                allElements.itemGetTime.value = s.itemGetTime || '500';
+                allElements.itemUse.value = s.itemUse || '720';
+                allElements.itemUseTime.value = s.itemUseTime || '195';
+                allElements.currentItems.value = s.currentItems || '250000';
+                allElements.endDatetime.value = s.endDatetime || '';
+                allElements.marginHours.value = s.marginHours || '1';
+                allElements.targetPoints.value = s.targetPoints || '100000';
+                allElements.pointsPerAction.value = s.pointsPerAction || '2148';
+                allElements.itemsForPoints.value = s.itemsForPoints || '720';
+                showSettingsMessage('保存した設定を読み込みました');
+            }
+        }
+
+        function clearSettings() {
+            localStorage.removeItem(SETTINGS_KEY);
+            showSettingsMessage('保存データを削除しました');
+        }
+
+        // --- Time Calculator ---
+        function calculateAndSetRemainTime() {
+            const now = new Date();
+            allElements.currentTimeDisplay.textContent = now.toLocaleString('ja-JP');
+            const endDateValue = allElements.endDatetime.value;
+            const marginHours = parseFloat(allElements.marginHours.value) || 0;
+            allElements.timeCalcError.textContent = '';
+            if (!endDateValue) {
+                allElements.timeCalcError.textContent = '終了予定日時を設定してください。';
+                allElements.remainTime.value = 0;
+                return;
+            }
+            const endDate = new Date(endDateValue);
+            const marginSeconds = marginHours * 60 * 60;
+            let remainingSeconds = (endDate.getTime() - now.getTime()) / 1000;
+            if (remainingSeconds < 0) {
+                remainingSeconds = 0;
+                allElements.timeCalcError.textContent = '終了日時が過去です。';
+            }
+            const finalSeconds = Math.max(0, remainingSeconds - marginSeconds);
+            allElements.remainTime.value = Math.round(finalSeconds);
+        }
+
+        // --- Main Goal Plan Calculator Logic ---
+        function calculateGoalPlan() {
+            allElements.errorMessage.textContent = '';
+            const inputs = {
+                pt: parseFloat(allElements.targetPoints.value), ppa: parseFloat(allElements.pointsPerAction.value),
+                ifp: parseFloat(allElements.itemsForPoints.value), ig: parseFloat(allElements.itemGet.value),
+                tg: parseFloat(allElements.itemGetTime.value), iu: parseFloat(allElements.itemUse.value),
+                tu: parseFloat(allElements.itemUseTime.value), ic: parseFloat(allElements.currentItems.value),
+                tr: parseFloat(allElements.remainTime.value)
+            };
+
+            if (Object.values(inputs).some(isNaN) || inputs.ifp <= 0 || inputs.ig <= 0 || inputs.iu <= 0) {
+                allElements.errorMessage.textContent = 'すべての入力フィールドに有効な数値を入力してください。';
+                allElements.outputSection.classList.add('hidden'); return;
+            }
+
+            const pointsPerOneUseAction = (inputs.ppa / inputs.ifp) * inputs.iu;
+            if (pointsPerOneUseAction <= 0) {
+                allElements.errorMessage.textContent = '1回あたりの獲得ポイントが0以下です。';
+                allElements.outputSection.classList.add('hidden'); return;
+            }
+
+            plan.m_target = inputs.pt / pointsPerOneUseAction;
+            const items_needed_for_use = plan.m_target * inputs.iu;
+            const additional_items_to_get = Math.max(0, items_needed_for_use - inputs.ic);
+            plan.n_target = additional_items_to_get / inputs.ig;
+            plan.time_for_gets = plan.n_target * inputs.tg;
+            plan.time_for_uses = plan.m_target * inputs.tu;
+            const total_time_required = plan.time_for_gets + plan.time_for_uses;
+            
+            const total_actions = plan.n_target + plan.m_target;
+            plan.planned_avg_lap = total_actions > 0 ? total_time_required / total_actions : 0;
+
+            // Update UI
+            allElements.outputSection.classList.remove('hidden');
+            allElements.reqUses.textContent = plan.m_target.toLocaleString(undefined, {maximumFractionDigits: 2});
+            allElements.reqItemsForUse.textContent = items_needed_for_use.toLocaleString(undefined, {maximumFractionDigits: 0});
+            allElements.reqItemsToGet.textContent = additional_items_to_get.toLocaleString(undefined, {maximumFractionDigits: 0});
+            allElements.reqGets.textContent = plan.n_target.toLocaleString(undefined, {maximumFractionDigits: 2});
+            allElements.timeForGets.textContent = formatSeconds(plan.time_for_gets, true);
+            allElements.totalTimeReq.textContent = formatSeconds(total_time_required, true);
+            allElements.totalTimeAvail.textContent = formatSeconds(inputs.tr, true);
+
+            // Judgement
+            if (total_time_required <= inputs.tr) {
+                allElements.judgementText.textContent = '達成可能です';
+                allElements.judgementDetail.textContent = `(残り ${formatSeconds(inputs.tr - total_time_required, true)} の余裕)`;
+                allElements.judgementBox.className = 'p-3 rounded-lg text-center transition bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200';
+            } else {
+                allElements.judgementText.textContent = '達成不可能です';
+                allElements.judgementDetail.textContent = `(${formatSeconds(total_time_required - inputs.tr, true)} 不足)`;
+                allElements.judgementBox.className = 'p-3 rounded-lg text-center transition bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200';
+            }
+            
+            resetAllPacemakers();
+            updatePaceStatus();
+        }
+
+        // --- Generic Pacemaker Logic ---
+        function handlePaceAction(paceObject, countDisplay, avgLapDisplay, currentLapDisplay) {
+            const now = Date.now();
+            if (paceObject.lastTimestamp) {
+                const lapDuration = (now - paceObject.lastTimestamp) / 1000;
+                paceObject.lapTimes.push(lapDuration);
+            } else {
+                paceObject.intervalId = setInterval(() => updateLapTimer(paceObject, currentLapDisplay), 1000);
+            }
+            paceObject.lastTimestamp = now;
+            paceObject.count++;
+            countDisplay.textContent = paceObject.count;
+            
+            if (paceObject.lapTimes.length > 0) {
+                const totalLapTime = paceObject.lapTimes.reduce((a, b) => a + b, 0);
+                const avgLap = totalLapTime / paceObject.lapTimes.length;
+                avgLapDisplay.textContent = formatSeconds(avgLap);
+            }
+            updatePaceStatus();
+        }
+
+        function updateLapTimer(paceObject, currentLapDisplay) {
+            if (!paceObject.lastTimestamp) return;
+            const elapsed = (Date.now() - paceObject.lastTimestamp) / 1000;
+            currentLapDisplay.textContent = formatSeconds(elapsed);
+        }
+
+        function updatePaceStatus() {
+            if (plan.planned_avg_lap <= 0) {
+                allElements.paceStatusText.textContent = 'まず「計画を計算する」を押してください';
+                allElements.paceStatusDetail.textContent = '';
+                allElements.paceStatus.className = 'p-4 rounded-lg text-center transition bg-gray-200 dark:bg-gray-600';
+                return;
+            }
+            
+            const totalActualLaps = getPace.lapTimes.length + usePace.lapTimes.length;
+            allElements.paceStatusDetail.textContent = `計画上の平均ラップ: ${formatSeconds(plan.planned_avg_lap)}`;
+
+            if (totalActualLaps === 0) {
+                allElements.paceStatusText.textContent = '取得または使用ボタンで計測開始';
+                allElements.paceStatus.className = 'p-4 rounded-lg text-center transition bg-blue-100 dark:bg-blue-900/50';
+                return;
+            }
+
+            const totalActualTime = getPace.lapTimes.reduce((a, b) => a + b, 0) + usePace.lapTimes.reduce((a, b) => a + b, 0);
+            const actualAvgLap = totalActualTime / totalActualLaps;
+            const paceRatio = actualAvgLap / plan.planned_avg_lap;
+
+            if (paceRatio <= 1.05) {
+                allElements.paceStatusText.textContent = '全体のペースは順調です';
+                allElements.paceStatus.className = 'p-4 rounded-lg text-center transition bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200';
+            } else if (paceRatio <= 1.20) {
+                allElements.paceStatusText.textContent = '全体のペースが少し遅れています';
+                allElements.paceStatus.className = 'p-4 rounded-lg text-center transition bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200';
+            } else {
+                allElements.paceStatusText.textContent = '全体のペースが遅れています！';
+                allElements.paceStatus.className = 'p-4 rounded-lg text-center transition bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200';
+            }
+        }
+
+        function resetAllPacemakers() {
+            [getPace, usePace].forEach(p => {
+                clearInterval(p.intervalId);
+                p.intervalId = null;
+                p.count = 0; p.lapTimes = []; p.lastTimestamp = null;
+            });
+            allElements.getCount.textContent = '0';
+            allElements.getCurrentLap.textContent = '00:00';
+            allElements.getAvgLap.textContent = '--:--';
+            allElements.useCount.textContent = '0';
+            allElements.useCurrentLap.textContent = '00:00';
+            allElements.useAvgLap.textContent = '--:--';
+            updatePaceStatus();
+        }
+
+        // --- Event Listeners ---
+        allElements.saveSettingsBtn.addEventListener('click', saveSettings);
+        allElements.loadSettingsBtn.addEventListener('click', loadSettings);
+        allElements.clearSettingsBtn.addEventListener('click', clearSettings);
+        allElements.calculateBtn.addEventListener('click', calculateGoalPlan);
+        allElements.endDatetime.addEventListener('input', calculateAndSetRemainTime);
+        allElements.marginHours.addEventListener('input', calculateAndSetRemainTime);
+        allElements.resetPaceBtn.addEventListener('click', resetAllPacemakers);
+        allElements.getItemBtn.addEventListener('click', () => handlePaceAction(getPace, allElements.getCount, allElements.getAvgLap, allElements.getCurrentLap));
+        allElements.useItemBtn.addEventListener('click', () => handlePaceAction(usePace, allElements.useCount, allElements.useAvgLap, allElements.useCurrentLap));
+        
+        // --- Initial Load ---
+        loadSettings();
+        if (!allElements.endDatetime.value) {
+            const defaultEndDate = new Date(Date.now() + 38 * 60 * 60 * 1000);
+            const y = defaultEndDate.getFullYear(), m = (defaultEndDate.getMonth() + 1).toString().padStart(2, '0'), d = defaultEndDate.getDate().toString().padStart(2, '0');
+            const h = defaultEndDate.getHours().toString().padStart(2, '0'), min = defaultEndDate.getMinutes().toString().padStart(2, '0');
+            allElements.endDatetime.value = `${y}-${m}-${d}T${h}:${min}`;
+        }
+        setInterval(calculateAndSetRemainTime, 1000);
+        calculateAndSetRemainTime();
+    });
+    </script>
+</body>
+</html>
